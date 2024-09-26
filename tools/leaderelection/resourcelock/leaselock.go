@@ -25,6 +25,8 @@ import (
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
+
 	coordinationv1client "k8s.io/client-go/kubernetes/typed/coordination/v1"
 )
 
@@ -39,8 +41,10 @@ type LeaseLock struct {
 
 // Get returns the election record from a Lease spec
 func (ll *LeaseLock) Get(ctx context.Context) (*LeaderElectionRecord, []byte, error) {
+	klog.Infof("get lease %s", ll.LeaseMeta.Name)
 	lease, err := ll.Client.Leases(ll.LeaseMeta.Namespace).Get(ctx, ll.LeaseMeta.Name, metav1.GetOptions{})
 	if err != nil {
+		klog.Infof("get lease error %s", err.Error())
 		return nil, nil, err
 	}
 	ll.lease = lease
@@ -72,10 +76,12 @@ func (ll *LeaseLock) Update(ctx context.Context, ler LeaderElectionRecord) error
 	}
 	ll.lease.Spec = LeaderElectionRecordToLeaseSpec(&ler)
 
+	klog.Infof("lease update %#v", ll.lease)
 	lease, err := ll.Client.Leases(ll.LeaseMeta.Namespace).Update(ctx, ll.lease, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
+	klog.Infof("lease update end")
 
 	ll.lease = lease
 	return nil

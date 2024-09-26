@@ -465,8 +465,8 @@ func (rt *debuggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 	if rt.levels[DebugCurlCommand] {
 		klog.Infof("%s", reqInfo.toCurl())
 	}
-	if rt.levels[DebugRequestHeaders] {
-		klog.Info("Request Headers:")
+	if true {
+		klog.Infof("Request Headers: %s", reqInfo.RequestURL)
 		for key, values := range reqInfo.RequestHeaders {
 			for _, value := range values {
 				value = maskValue(key, value)
@@ -477,7 +477,7 @@ func (rt *debuggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 
 	startTime := time.Now()
 
-	if rt.levels[DebugDetailedTiming] {
+	if true {
 		var getConn, dnsStart, dialStart, tlsStart, serverStart time.Time
 		var host string
 		trace := &httptrace.ClientTrace{
@@ -487,18 +487,26 @@ func (rt *debuggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 				defer reqInfo.muTrace.Unlock()
 				dnsStart = time.Now()
 				host = info.Host
+
+				klog.Infof("DNSStart %s", reqInfo.RequestURL)
+
 			},
 			DNSDone: func(info httptrace.DNSDoneInfo) {
 				reqInfo.muTrace.Lock()
 				defer reqInfo.muTrace.Unlock()
 				reqInfo.DNSLookup = time.Since(dnsStart)
 				klog.Infof("HTTP Trace: DNS Lookup for %s resolved to %v", host, info.Addrs)
+
+				klog.Infof("DNSDone %s", reqInfo.RequestURL)
+
 			},
 			// Dial
 			ConnectStart: func(network, addr string) {
 				reqInfo.muTrace.Lock()
 				defer reqInfo.muTrace.Unlock()
 				dialStart = time.Now()
+
+				klog.Infof("ConnectStart %s", reqInfo.RequestURL)
 			},
 			ConnectDone: func(network, addr string, err error) {
 				reqInfo.muTrace.Lock()
@@ -509,50 +517,67 @@ func (rt *debuggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 				} else {
 					klog.Infof("HTTP Trace: Dial to %s:%s succeed", network, addr)
 				}
+
+				klog.Infof("ConnectDone %s", reqInfo.RequestURL)
+
 			},
 			// TLS
 			TLSHandshakeStart: func() {
 				tlsStart = time.Now()
+				klog.Infof("TLSHandshakeStart %s", reqInfo.RequestURL)
+
 			},
 			TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
 				reqInfo.muTrace.Lock()
 				defer reqInfo.muTrace.Unlock()
 				reqInfo.TLSHandshake = time.Since(tlsStart)
+
+				klog.Infof("TLSHandshakeDone %s", reqInfo.RequestURL)
+
 			},
 			// Connection (it can be DNS + Dial or just the time to get one from the connection pool)
 			GetConn: func(hostPort string) {
 				getConn = time.Now()
+				klog.Infof("getConn %s", reqInfo.RequestURL)
 			},
 			GotConn: func(info httptrace.GotConnInfo) {
 				reqInfo.muTrace.Lock()
 				defer reqInfo.muTrace.Unlock()
 				reqInfo.GetConnection = time.Since(getConn)
 				reqInfo.ConnectionReused = info.Reused
+
+				klog.Infof("GotConn %s", reqInfo.RequestURL)
 			},
 			// Server Processing (time since we wrote the request until first byte is received)
 			WroteRequest: func(info httptrace.WroteRequestInfo) {
 				reqInfo.muTrace.Lock()
 				defer reqInfo.muTrace.Unlock()
 				serverStart = time.Now()
+				klog.Infof("WroteRequest %s", reqInfo.RequestURL)
 			},
 			GotFirstResponseByte: func() {
 				reqInfo.muTrace.Lock()
 				defer reqInfo.muTrace.Unlock()
 				reqInfo.ServerProcessing = time.Since(serverStart)
+
+				klog.Infof("GotFirstResponseByte %s", reqInfo.RequestURL)
+
 			},
 		}
 		req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	}
 
+	klog.Infof("deletgate roundtrip %s", reqInfo.RequestURL)
 	response, err := rt.delegatedRoundTripper.RoundTrip(req)
+	klog.Infof("After deletgate roundtrip %s", reqInfo.RequestURL)
 	reqInfo.Duration = time.Since(startTime)
 
 	reqInfo.complete(response, err)
 
-	if rt.levels[DebugURLTiming] {
-		klog.Infof("%s %s %s in %d milliseconds", reqInfo.RequestVerb, reqInfo.RequestURL, reqInfo.ResponseStatus, reqInfo.Duration.Nanoseconds()/int64(time.Millisecond))
+	if true {
+		klog.Infof("%s %s %s in %d milliseconds %s", reqInfo.RequestVerb, reqInfo.RequestURL, reqInfo.ResponseStatus, reqInfo.Duration.Nanoseconds()/int64(time.Millisecond), reqInfo.toCurl())
 	}
-	if rt.levels[DebugDetailedTiming] {
+	if true {
 		stats := ""
 		if !reqInfo.ConnectionReused {
 			stats += fmt.Sprintf(`DNSLookup %d ms Dial %d ms TLSHandshake %d ms`,
@@ -567,14 +592,14 @@ func (rt *debuggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 			stats += fmt.Sprintf(` ServerProcessing %d ms`, reqInfo.ServerProcessing.Nanoseconds()/int64(time.Millisecond))
 		}
 		stats += fmt.Sprintf(` Duration %d ms`, reqInfo.Duration.Nanoseconds()/int64(time.Millisecond))
-		klog.Infof("HTTP Statistics: %s", stats)
+		klog.Infof("HTTP Statistics: %s %s", stats, reqInfo.toCurl())
 	}
 
-	if rt.levels[DebugResponseStatus] {
-		klog.Infof("Response Status: %s in %d milliseconds", reqInfo.ResponseStatus, reqInfo.Duration.Nanoseconds()/int64(time.Millisecond))
+	if true {
+		klog.Infof("Response Status: %s in %d milliseconds %s", reqInfo.ResponseStatus, reqInfo.Duration.Nanoseconds()/int64(time.Millisecond), reqInfo.toCurl())
 	}
-	if rt.levels[DebugResponseHeaders] {
-		klog.Info("Response Headers:")
+	if true {
+		klog.Info("Response Headers: %s", reqInfo.toCurl())
 		for key, values := range reqInfo.ResponseHeaders {
 			for _, value := range values {
 				klog.Infof("    %s: %s", key, value)

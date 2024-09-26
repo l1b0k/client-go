@@ -42,11 +42,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/streaming"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
+
 	restclientwatch "k8s.io/client-go/rest/watch"
 	"k8s.io/client-go/tools/metrics"
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/klog/v2"
-	"k8s.io/utils/clock"
 )
 
 var (
@@ -959,12 +960,14 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 		client = http.DefaultClient
 	}
 
+	klog.Infof("request before throttle %#v", r.finalURLTemplate())
 	// Throttle the first try before setting up the timeout configured on the
 	// client. We don't want a throttled client to return timeouts to callers
 	// before it makes a single request.
 	if err := r.tryThrottle(ctx); err != nil {
 		return err
 	}
+	klog.Infof("request after throttle %#v", r.finalURLTemplate())
 
 	if r.timeout > 0 {
 		var cancel context.CancelFunc
@@ -989,13 +992,18 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 	// Right now we make about ten retry attempts if we get a Retry-After response.
 	retry := r.retryFn(r.maxRetries)
 	for {
+		klog.Infof("retry before %#v", r.finalURLTemplate())
 		if err := retry.Before(ctx, r); err != nil {
 			return retry.WrapPreviousError(err)
 		}
+		klog.Infof("after before %#v", r.finalURLTemplate())
+
 		req, err := r.newHTTPRequest(ctx)
 		if err != nil {
 			return err
 		}
+
+		klog.Infof("before do %s", r.finalURLTemplate())
 		resp, err := client.Do(req)
 		// The value -1 or a value of 0 with a non-nil Body indicates that the length is unknown.
 		// https://pkg.go.dev/net/http#Request

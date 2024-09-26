@@ -63,9 +63,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	rl "k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
+
+	rl "k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
 const (
@@ -312,6 +313,7 @@ func (le *LeaderElector) release() bool {
 // else it tries to renew the lease if it has already been acquired. Returns true
 // on success else returns false.
 func (le *LeaderElector) tryAcquireOrRenew(ctx context.Context) bool {
+	klog.Infof("tryAcquireOrRenew")
 	now := metav1.NewTime(le.clock.Now())
 	leaderElectionRecord := rl.LeaderElectionRecord{
 		HolderIdentity:       le.config.Lock.Identity(),
@@ -359,6 +361,7 @@ func (le *LeaderElector) tryAcquireOrRenew(ctx context.Context) bool {
 		leaderElectionRecord.LeaderTransitions = oldLeaderElectionRecord.LeaderTransitions + 1
 	}
 
+	klog.Infof("update leaderElectionRecord")
 	// update the lock itself
 	if err = le.config.Lock.Update(ctx, leaderElectionRecord); err != nil {
 		klog.Errorf("Failed to update lock: %v", err)
